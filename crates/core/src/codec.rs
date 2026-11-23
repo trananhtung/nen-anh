@@ -121,7 +121,7 @@ fn ssim2(a: &Raster, b: &Raster) -> Res<f64> {
 /// SSIMULACRA2 of two pictures. Very large ones are scored region by region to bound memory.
 pub fn score(a: &Raster, b: &Raster) -> Res<f64> {
     if (a.w, a.h, a.ch, a.data.len()) != (b.w, b.h, b.ch, b.data.len()) {
-        return Err("kích thước ảnh không khớp".into());
+        return Err("Kích thước ảnh không khớp".into());
     }
     if a.ch == 4 {
         let dark = score(&a.over(0), &b.over(0))?;
@@ -270,13 +270,13 @@ pub fn jpeg_transcode(data: &[u8]) -> Res<Vec<u8>> {
             ffi::jpeg_finish_compress(&mut t.dst);
             ffi::jpeg_finish_decompress(&mut t.src);
             if t.src_err.num_warnings > 0 {
-                return Err("dữ liệu JPG bị thiếu hoặc hỏng".into());
+                return Err("Dữ liệu JPG bị thiếu hoặc hỏng".into());
             }
             Ok(std::slice::from_raw_parts(t.out, t.out_len as usize).to_vec())
         }
     };
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(run))
-        .unwrap_or_else(|_| Err("không đọc được file JPG".into()))
+        .unwrap_or_else(|_| Err("Không đọc được file JPG".into()))
 }
 
 pub fn jpeg_same_pixels(a: &[u8], b: &[u8], components: usize) -> Res<bool> {
@@ -324,7 +324,7 @@ pub fn png_same_pixels(a: &[u8], b: &[u8]) -> Res<bool> {
 pub fn quantize(r: &Raster) -> Res<Raster> {
     if r.ch == 3 {
         let img = image::RgbImage::from_raw(r.w as u32, r.h as u32, r.data.clone())
-            .ok_or("kích thước ảnh không khớp")?;
+            .ok_or("Kích thước ảnh không khớp")?;
         let img = quantette::ImageBuf::try_from(img).map_err(err)?;
         let out = quantette::Pipeline::new()
             .quantize_method(quantette::QuantizeMethod::kmeans())
@@ -375,7 +375,7 @@ pub fn webp_size(data: &[u8]) -> Option<(usize, usize)> {
 }
 
 pub fn webp_decode(data: &[u8]) -> Res<Raster> {
-    let img = webp::Decoder::new(data).decode().ok_or("không đọc được file WebP")?;
+    let img = webp::Decoder::new(data).decode().ok_or("Không đọc được file WebP")?;
     let ch = if img.is_alpha() { 4 } else { 3 };
     Ok(Raster { w: img.width() as usize, h: img.height() as usize, ch, data: img.to_vec() })
 }

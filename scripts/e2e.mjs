@@ -46,9 +46,17 @@ async function until(expression, what, seconds = 90) {
 
 await until("!!document.querySelector('.drop')", "start screen missing");
 const payload = { paths: [folder], position: { x: 10, y: 10 } };
-await js(`window.__TAURI_INTERNALS__.invoke('plugin:event|emit_to', {
-  target: { kind: 'Webview', label: 'main' }, event: 'tauri://drag-drop', payload: ${JSON.stringify(payload)} })`);
-await until("document.querySelectorAll('.row').length === 2", "dropped folder was not listed");
+// The page subscribes asynchronously, so an early drop can be lost; files already listed are ignored.
+const drop = `window.__TAURI_INTERNALS__.invoke('plugin:event|emit_to', {
+  target: { kind: 'Webview', label: 'main' }, event: 'tauri://drag-drop', payload: ${JSON.stringify(payload)} })`;
+await until(
+  `(async () => {
+    const rows = () => document.querySelectorAll('.row').length;
+    if (rows() === 0) await ${drop};
+    return rows() === 2;
+  })()`,
+  "dropped folder was not listed",
+);
 await js("document.querySelector('.big').click()");
 await until("document.querySelector('.big').textContent.includes('Mở thư mục')", "compression did not finish");
 const states = await js("[...document.querySelectorAll('.row')].map(r => r.dataset.state).sort().join()");

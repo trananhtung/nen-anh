@@ -38,6 +38,10 @@ fn scan(paths: Vec<PathBuf>) -> Vec<Item> {
 #[tauri::command(async)]
 fn forecast(job: State<'_, Job>, items: Vec<Item>, target: Target) -> Option<Forecast> {
     let stop = job.restart_forecast();
+    // Checked after registering: `start` sets `running` before it stops the registered forecast.
+    if job.running.load(Ordering::SeqCst) {
+        return None;
+    }
     batch::forecast(&items, target, &stop)
 }
 

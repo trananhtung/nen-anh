@@ -220,7 +220,8 @@ pub fn run(
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Forecast {
-    /// Size of all pictures now.
+    /// Current size of the pictures covered. Groups whose sample could not be read are left out of
+    /// both totals, so compare `after` with this and not with the size of the whole list.
     pub before: f64,
     /// Predicted size at lossless, high, balanced and small.
     pub after: Sizes,

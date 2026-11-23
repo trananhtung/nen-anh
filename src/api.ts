@@ -20,6 +20,13 @@ export interface Item {
   size: number;
 }
 
+export interface Forecast {
+  before: number;
+  /** Predicted size at lossless, high, balanced and small. */
+  after: [number, number, number, number];
+  sampled: number;
+}
+
 export type Report =
   | { state: "working" }
   | {
@@ -44,6 +51,8 @@ export type DropState = "over" | "leave";
 
 export interface Api {
   scan(paths: string[]): Promise<Item[]>;
+  /** Null when superseded by a newer request or when nothing could be read. */
+  forecast(items: Item[], target: Target): Promise<Forecast | null>;
   start(items: Item[], outDir: string | null, options: Options): Promise<void>;
   cancel(): Promise<void>;
   reveal(path: string): Promise<void>;
@@ -61,6 +70,7 @@ function sync(p: Promise<() => void>): () => void {
 
 const native: Api = {
   scan: (paths) => invoke("scan", { paths }),
+  forecast: (items, target) => invoke("forecast", { items, target }),
   start: (items, outDir, options) => invoke("start", { items, outDir, options }),
   cancel: () => invoke("cancel"),
   reveal: (path) => revealItemInDir(path),
@@ -105,6 +115,12 @@ function demo(): Api {
   return {
     scan: async (paths) =>
       paths.flatMap((p) => names.map(([n, size]) => ({ path: `${p}\\${n}`, subdir: "", base: p, size }))),
+    async forecast(items, target) {
+      await wait(900);
+      const before = items.reduce((n, i) => n + i.size, 0);
+      const k = target === "keep" ? [0.97, 0.7, 0.38, 0.24] : [0.95, 0.6, 0.3, 0.18];
+      return { before, after: k.map((v) => v * before) as [number, number, number, number], sampled: items.length };
+    },
     async start(items) {
       stop = false;
       void (async () => {

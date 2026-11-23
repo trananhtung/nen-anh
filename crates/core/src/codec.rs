@@ -31,24 +31,35 @@ impl Raster {
         Raster { w, h, ch: self.ch, data }
     }
 
-    /// Nine tiles spread over the picture: a cheap stand-in while searching for a quality.
-    pub fn proxy(&self) -> Option<Raster> {
-        const TILE: usize = 512;
-        if self.w < TILE * 4 || self.h < TILE * 4 {
-            return None;
-        }
-        let mut data = Vec::with_capacity(TILE * TILE * 9 * self.ch);
-        let at = |i: usize, full: usize| ((full - TILE) * i / 2) & !15;
+    /// Nine tiles spread over the picture, side by side.
+    fn tiles(&self, tile: usize) -> Raster {
+        let mut data = Vec::with_capacity(tile * tile * 9 * self.ch);
+        let at = |i: usize, full: usize| ((full - tile) * i / 2) & !15;
         for ty in 0..3 {
             let y0 = at(ty, self.h);
-            for row in y0..y0 + TILE {
+            for row in y0..y0 + tile {
                 for tx in 0..3 {
                     let start = (row * self.w + at(tx, self.w)) * self.ch;
-                    data.extend_from_slice(&self.data[start..start + TILE * self.ch]);
+                    data.extend_from_slice(&self.data[start..start + tile * self.ch]);
                 }
             }
         }
-        Some(Raster { w: TILE * 3, h: TILE * 3, ch: self.ch, data })
+        Raster { w: tile * 3, h: tile * 3, ch: self.ch, data }
+    }
+
+    /// A cheap stand-in while searching for a quality.
+    pub fn proxy(&self) -> Option<Raster> {
+        const TILE: usize = 512;
+        (self.w >= TILE * 4 && self.h >= TILE * 4).then(|| self.tiles(TILE))
+    }
+
+    /// An even smaller stand-in for predicting sizes.
+    pub fn sample(&self) -> Raster {
+        let tile = (self.w.min(self.h) / 3).min(256) & !15;
+        if self.w * self.h <= 600_000 || tile < 64 {
+            return self.clone();
+        }
+        self.tiles(tile)
     }
 
     fn over(&self, bg: u8) -> Raster {
@@ -312,6 +323,26 @@ pub fn png_optimize(data: &[u8], strip: bool) -> Res<Vec<u8>> {
     oxipng::optimize_from_memory(data, &o).map_err(err)
 }
 
+/// Quick variant for predictions.
+pub fn png_optimize_fast(data: &[u8]) -> Res<Vec<u8>> {
+    let mut o = oxipng::Options::from_preset(1);
+    o.optimize_alpha = false;
+    o.interlace = Some(false);
+    oxipng::optimize_from_memory(data, &o).map_err(err)
+}
+
+/// Quick variant for predictions, without metadata.
+pub fn png_encode_fast(r: &Raster) -> Res<Vec<u8>> {
+    let color = if r.ch == 4 {
+        oxipng::ColorType::RGBA
+    } else {
+        oxipng::ColorType::RGB { transparent_color: None }
+    };
+    oxipng::RawImage::new(r.w as u32, r.h as u32, color, oxipng::BitDepth::Eight, r.data.clone())
+        .and_then(|raw| raw.create_optimized_png(&oxipng::Options::from_preset(1)))
+        .map_err(err)
+}
+
 pub fn png_same_pixels(a: &[u8], b: &[u8]) -> Res<bool> {
     let (a, b) = (png_decode(a)?, png_decode(b)?);
     if a.color().bytes_per_pixel() / a.color().channel_count() > 1 {
@@ -381,10 +412,19 @@ pub fn webp_decode(data: &[u8]) -> Res<Raster> {
 }
 
 pub fn webp_encode(r: &Raster, quality: Option<u8>, last: bool) -> Res<Vec<u8>> {
+    webp_encode_with(r, quality, if last { 6 } else { 4 })
+}
+
+/// Quick lossless variant for predictions.
+pub fn webp_lossless_fast(r: &Raster) -> Res<Vec<u8>> {
+    webp_encode_with(r, None, 1)
+}
+
+fn webp_encode_with(r: &Raster, quality: Option<u8>, method: i32) -> Res<Vec<u8>> {
     let mut c = webp::WebPConfig::new().map_err(|()| "cấu hình WebP không hợp lệ")?;
     c.lossless = i32::from(quality.is_none());
     c.quality = quality.map_or(75.0, f32::from);
-    c.method = if last { 6 } else { 4 };
+    c.method = method;
     c.exact = 1;
     c.alpha_quality = 100;
     c.use_sharp_yuv = 1;

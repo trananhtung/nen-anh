@@ -21,3 +21,14 @@ export function saved(before: number, after: number): number {
 export function fileName(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
 }
+
+/** A forecast, rounded down to a multiple of five so that it promises too little rather than too much. */
+export function roughly(before: number, after: number): string {
+  const percent = Math.floor(saved(before, after) / 5) * 5;
+  return percent < 5 ? "dưới 5%" : `khoảng ${percent}%`;
+}
+
+export function range([low, high]: readonly [number, number]): string {
+  if (high < 5) return "dưới 5%";
+  return low === high ? `${low}%` : `${low}–${high}%`;
+}

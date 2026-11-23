@@ -323,6 +323,45 @@ fn batch_is_safe_for_originals_and_survives_bad_files() {
     assert_eq!(leftovers, 0);
 }
 
+#[test]
+fn forecast_does_not_promise_too_much() {
+    use nenanh_core::estimate::estimate;
+    let no = AtomicBool::new(false);
+    let input = jpeg(photo(1400, 1100), 96);
+    for t in [Target::Keep, Target::Webp] {
+        let guess = estimate(&input, t, &no).unwrap();
+        let mut limit = input.len() as f64;
+        for (g, l) in guess.into_iter().zip(ALL_LEVELS) {
+            assert!(g > 0.0 && g <= limit, "{t:?} {guess:?}");
+            limit = g;
+            if l == Level::Balanced {
+                let real = run(&input, opts(t, l)).data.map_or(input.len(), |d| d.len()) as f64;
+                let (said, got) = (1.0 - g / input.len() as f64, 1.0 - real / input.len() as f64);
+                assert!(said < got + 0.05, "{t:?}: promised {said:.2}, got {got:.2}");
+                assert!(said > got * 0.5, "{t:?}: promised only {said:.2}, got {got:.2}");
+            }
+        }
+    }
+    let hdr = with_segment(&sample_jpeg(), 0xE1, b"http://ns.adobe.com/xap/1.0/\0<x hdrgm:Version=\"1.0\"/>");
+    assert_eq!(estimate(&hdr, Target::Webp, &no).unwrap(), [hdr.len() as f64; 4]);
+    assert!(estimate(b"not an image", Target::Keep, &no).is_err());
+    assert_eq!(estimate(&input, Target::Keep, &AtomicBool::new(true)).unwrap_err(), Error::Cancelled);
+}
+
+#[test]
+fn forecast_skips_unreadable_files() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("a.jpg"), sample_jpeg()).unwrap();
+    fs::write(dir.path().join("b.jpg"), &sample_jpeg()[..900]).unwrap();
+    let items = batch::scan(&[dir.path().to_path_buf()]);
+    let no = AtomicBool::new(false);
+    let f = batch::forecast(&items, Target::Keep, &no).unwrap();
+    assert_eq!(f.sampled, 1);
+    assert!(f.after[2] < f.before);
+    assert!(batch::forecast(&[], Target::Keep, &no).is_none());
+    assert!(batch::forecast(&items, Target::Keep, &AtomicBool::new(true)).is_none());
+}
+
 fn walk(dir: &std::path::Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     for e in fs::read_dir(dir).unwrap().flatten() {

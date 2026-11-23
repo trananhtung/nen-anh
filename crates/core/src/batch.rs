@@ -220,10 +220,10 @@ pub fn run(
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Forecast {
-    /// Current size of the pictures covered. Groups whose sample could not be read are left out of
-    /// both totals, so compare `after` with this and not with the size of the whole list.
+    /// Size of all pictures now.
     pub before: f64,
-    /// Predicted size at lossless, high, balanced and small.
+    /// Predicted size of all pictures at lossless, high, balanced and small. Groups in which
+    /// nothing could be read count as not shrinking.
     pub after: Sizes,
     /// Number of pictures actually measured.
     pub sampled: usize,
@@ -233,40 +233,45 @@ pub struct Forecast {
 /// `None` when cancelled or when nothing could be read.
 pub fn forecast(items: &[Item], target: Target, cancel: &AtomicBool) -> Option<Forecast> {
     const SAMPLES: usize = 6;
+    /// Pictures tried per group before giving up on it.
+    const TRIES: usize = 3;
     let mut sorted: Vec<&Item> = items.iter().collect();
     sorted.sort_by_key(|i| i.size);
     let groups = sorted.len().min(SAMPLES);
     let budget = Budget::default();
-    // Each group is represented by its middle picture.
-    let measured: Vec<Option<(f64, Sizes)>> = std::thread::scope(|s| {
+    // Each group is represented by its middle picture, or the nearest one that can be read.
+    let measured: Vec<(f64, Option<Sizes>)> = std::thread::scope(|s| {
         let handles: Vec<_> = (0..groups)
             .map(|g| {
                 let group = &sorted[sorted.len() * g / groups..sorted.len() * (g + 1) / groups];
                 let budget = &budget;
                 s.spawn(move || {
-                    let total: u64 = group.iter().map(|i| i.size).sum();
-                    let item = group[group.len() / 2];
-                    if item.size > MAX_FILE_BYTES {
-                        return None;
-                    }
-                    let input = fs::read(&item.path).ok()?;
-                    let _permit = budget.acquire(pixel_count(&input).ok()?);
-                    let sizes = estimate(&input, target, cancel).ok()?;
-                    let factor = total as f64 / input.len() as f64;
-                    Some((total as f64, sizes.map(|v| v * factor)))
+                    let total = group.iter().map(|i| i.size).sum::<u64>() as f64;
+                    let (smaller, larger) = group.split_at(group.len() / 2);
+                    let sizes = larger.iter().chain(smaller.iter().rev()).take(TRIES).find_map(|item| {
+                        if item.size > MAX_FILE_BYTES || cancel.load(Ordering::Relaxed) {
+                            return None;
+                        }
+                        let input = fs::read(&item.path).ok()?;
+                        let _permit = budget.acquire(pixel_count(&input).ok()?);
+                        let sizes = estimate(&input, target, cancel).ok()?;
+                        Some(sizes.map(|v| v * total / input.len() as f64))
+                    });
+                    (total, sizes)
                 })
             })
             .collect();
-        handles.into_iter().map(|h| h.join().ok().flatten()).collect()
+        // `estimate` guards against panics, so a lost thread means nothing can be said.
+        handles.into_iter().filter_map(|h| h.join().ok()).collect()
     });
     if cancel.load(Ordering::Relaxed) {
         return None;
     }
     let mut out = Forecast { before: 0.0, after: [0.0; 4], sampled: 0 };
-    for (before, after) in measured.into_iter().flatten() {
+    for (before, sizes) in measured {
         out.before += before;
-        out.sampled += 1;
-        for (sum, v) in out.after.iter_mut().zip(after) {
+        out.sampled += usize::from(sizes.is_some());
+        for (sum, v) in out.after.iter_mut().zip(sizes.unwrap_or([before; 4])) {
             *sum += v;
         }
     }

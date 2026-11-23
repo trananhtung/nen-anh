@@ -1,0 +1,40 @@
+name: debug
+on:
+  push:
+    branches: [debug-e2e]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 45133449875 -n windows -D art
+          $setup = (Get-ChildItem art -Recurse -Filter 'NenAnh-1.0.0-setup.exe').FullName
+          Start-Process $setup -ArgumentList '/S' -Wait
+          $exe = "$env:LOCALAPPDATA\NenAnh\NenAnh.exe"
+          function Probe($label) {
+            $p = Start-Process $exe -PassThru
+            Start-Sleep 12
+            Write-Host "=== $label"
+            Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Where-Object CommandLine -notmatch '--type=' | ForEach-Object { Write-Host $_.CommandLine }
+            Get-NetTCPConnection -State Listen -LocalPort 9222 -ErrorAction SilentlyContinue | Format-Table | Out-Host
+            try { (Invoke-WebRequest http://127.0.0.1:9222/json -TimeoutSec 5).Content | Out-Host } catch { Write-Host "ERR $_" }
+            Stop-Process -Id $p.Id -Force
+            Start-Sleep 4
+          }
+          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9222'
+          Probe 'environment variable'
+          Remove-Item Env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS
+          foreach ($hive in 'HKCU', 'HKLM') {
+            $key = "${hive}:\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments"
+            New-Item $key -Force | Out-Null
+            Set-ItemProperty $key 'NenAnh.exe' '--remote-debugging-port=9222'
+            Probe "registry $hive"
+          }

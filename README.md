@@ -14,7 +14,7 @@ Bộ cài chưa có chữ ký số nên Windows SmartScreen có thể cảnh bá
 ## Cách dùng
 
 1. Kéo ảnh hoặc thư mục vào cửa sổ.
-2. Chọn định dạng và mức nén.
+2. Chọn định dạng và mức nén. Mỗi mức hiện ước tính tỉ lệ giảm, tính từ ảnh của bạn.
 3. Bấm **Nén**. Kết quả nằm trong thư mục `anh-nen` cạnh ảnh gốc, hoặc nơi bạn chọn.
 
 | Mức nén | Cam kết |

@@ -4,6 +4,7 @@ mod avif;
 pub mod batch;
 mod codec;
 mod container;
+pub mod estimate;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 

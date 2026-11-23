@@ -386,9 +386,22 @@ input {
     flex: none;
   }
 
+  > span {
+    flex: 1;
+    min-width: 0;
+  }
+
   b {
-    display: block;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
     font-weight: 500;
+  }
+
+  em {
+    flex: none;
+    font-style: normal;
+    color: var(--accent);
   }
 
   small {

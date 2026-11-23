@@ -1,8 +1,8 @@
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use nenanh_core::batch::{self, Item, Report};
+use nenanh_core::batch::{self, Forecast, Item, Report};
 use nenanh_core::{Level, Options, Target};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
@@ -11,6 +11,17 @@ use tauri::{AppHandle, Emitter, State};
 struct Job {
     running: Arc<AtomicBool>,
     cancel: Arc<AtomicBool>,
+    /// Stop flag of the forecast being computed, replaced by every new request.
+    forecast: Mutex<Arc<AtomicBool>>,
+}
+
+impl Job {
+    fn restart_forecast(&self) -> Arc<AtomicBool> {
+        let mut current = self.forecast.lock().unwrap_or_else(|e| e.into_inner());
+        current.store(true, Ordering::SeqCst);
+        *current = Arc::default();
+        current.clone()
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -22,6 +33,12 @@ struct Progress {
 #[tauri::command(async)]
 fn scan(paths: Vec<PathBuf>) -> Vec<Item> {
     batch::scan(&paths)
+}
+
+#[tauri::command(async)]
+fn forecast(job: State<'_, Job>, items: Vec<Item>, target: Target) -> Option<Forecast> {
+    let stop = job.restart_forecast();
+    batch::forecast(&items, target, &stop)
 }
 
 #[tauri::command]
@@ -36,6 +53,7 @@ fn start(
         return Err("Đang nén, vui lòng đợi".into());
     }
     job.cancel.store(false, Ordering::SeqCst);
+    job.restart_forecast(); // leave the processor to the real work
     let (running, cancel) = (job.running.clone(), job.cancel.clone());
     std::thread::spawn(move || {
         batch::run(&items, out_dir.as_deref(), options, &cancel, &|index, report| {
@@ -78,7 +96,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(Job::default())
-        .invoke_handler(tauri::generate_handler![scan, start, cancel])
+        .invoke_handler(tauri::generate_handler![scan, forecast, start, cancel])
         .run(tauri::generate_context!())
         .expect("không khởi động được ứng dụng");
 }

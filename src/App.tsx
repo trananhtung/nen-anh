@@ -1,6 +1,7 @@
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
-import { type Item, type Level, type Options, type Report, type Target, api } from "./api";
-import { bytes, fileName, saved } from "./format";
+import { type Forecast, type Item, type Level, type Options, type Report, type Target, api } from "./api";
+import { bytes, fileName, range, roughly, saved } from "./format";
+import { SAMPLE_COUNT, TYPICAL } from "./typical";
 
 interface Row {
   item: Item;
@@ -41,9 +42,12 @@ export function App() {
   const [options, setOptions] = useState<Options>(() =>
     load("options", { target: "keep", level: "balanced", stripMetadata: false }),
   );
+  const latest = useRef(rows);
+  latest.current = rows;
   /** Paths of the current run, in the order the backend reports them. */
   const queue = useRef<string[]>([]);
   const busy = useRef(false);
+  const [forecast, setForecast] = useState<Forecast | "working" | null>(null);
 
   useEffect(() => localStorage.setItem("options", JSON.stringify(options)), [options]);
 
@@ -86,6 +90,25 @@ export function App() {
     // Earlier results no longer match the settings.
     setRows((old) => old.map((r) => ({ ...r, report: null })));
   };
+
+  const list = rows.map((r) => r.item.path).join("\n");
+  useEffect(() => {
+    const items = latest.current.map((r) => r.item);
+    if (list === "" || items.length === 0) {
+      setForecast(null);
+      return;
+    }
+    let stale = false;
+    setForecast("working");
+    const timer = setTimeout(async () => {
+      const result = await api.forecast(items, options.target).catch(() => null);
+      if (!stale) setForecast(result);
+    }, 250);
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
+  }, [list, options.target]);
 
   const pending = rows.filter((r) => !isFinal(r.report));
   const done = rows.flatMap((r) => (r.report?.state === "done" ? [r.report] : []));
@@ -137,8 +160,23 @@ export function App() {
     }
   };
 
-  const first = done[0];
   const count = rows.length;
+  const known = forecast !== null && forecast !== "working" ? forecast : null;
+  const levelIndex = LEVELS.findIndex((l) => l.value === options.level);
+  const expected = known?.after[levelIndex];
+  // The forecast covers readable pictures only; apply its ratio to the whole list.
+  const ratio = known && expected !== undefined && known.before > 0 ? expected / known.before : null;
+
+  const promise = (index: number): string => {
+    const level = LEVELS[index];
+    if (!level || (level.value === "lossless" && options.target === "avif")) return "";
+    if (forecast === "working") return "đang tính…";
+    if (known) return roughly(known.before, known.after[index] ?? known.before);
+    const typical = TYPICAL[options.target][index];
+    return count === 0 && typical ? range(typical) : "";
+  };
+
+  const first = done[0];
 
   return (
     <div className="app" data-hover={hover || undefined}>
@@ -210,8 +248,8 @@ export function App() {
         </fieldset>
 
         <fieldset disabled={running}>
-          <legend>Mức nén</legend>
-          {LEVELS.map((l) => (
+          <legend>Mức nén và tỉ lệ giảm</legend>
+          {LEVELS.map((l, i) => (
             <label key={l.value} className="choice">
               <input
                 type="radio"
@@ -221,11 +259,25 @@ export function App() {
                 onChange={() => change({ level: l.value })}
               />
               <span>
-                <b>{l.label}</b>
+                <b>
+                  {l.label}
+                  <em className="num">{promise(i)}</em>
+                </b>
                 <small>{l.hint}</small>
               </span>
             </label>
           ))}
+          <p className="hint">
+            {count === 0
+              ? `Mức giảm thường gặp, đo trên ${SAMPLE_COUNT} ảnh mẫu. Ảnh đã nén sẵn giảm ít hơn.`
+              : known
+                ? `Ước tính từ ${known.sampled}/${count} ảnh của bạn. Kết quả thật có thể khác.`
+                : forecast === "working"
+                  ? "Đang ước tính từ ảnh của bạn…"
+                  : running || done.length > 0
+                    ? "Xem kết quả thật ở danh sách bên trái."
+                    : "Không ước tính được từ các ảnh này."}
+          </p>
         </fieldset>
 
         <fieldset disabled={running}>
@@ -264,6 +316,14 @@ export function App() {
               <span className="muted">
                 {running ? `Xong ${done.length + failed}/${count} ảnh` : `Đã xong ${done.length} ảnh`}
                 {failed > 0 && `, ${failed} lỗi`}
+              </span>
+            </>
+          ) : !running && ratio !== null ? (
+            <>
+              <span className="muted">Ước tính giảm</span>
+              <strong className="num">{roughly(1, ratio)}</strong>
+              <span className="num">
+                {bytes(total)} → khoảng {bytes(Math.round(total * ratio))}
               </span>
             </>
           ) : (

@@ -9,7 +9,8 @@ use std::sync::{Condvar, Mutex};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Error, Options, compress, pixel_count};
+use crate::estimate::{Sizes, estimate};
+use crate::{Error, Options, Target, compress, pixel_count};
 
 /// Folder created next to the originals when no output folder was chosen.
 pub const DEFAULT_OUTPUT: &str = "anh-nen";
@@ -214,4 +215,59 @@ pub fn run(
             });
         }
     });
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Forecast {
+    /// Size of all pictures now.
+    pub before: f64,
+    /// Predicted size at lossless, high, balanced and small.
+    pub after: Sizes,
+    /// Number of pictures actually measured.
+    pub sampled: usize,
+}
+
+/// Predicts the result of a whole list from a few pictures chosen across the range of sizes.
+/// `None` when cancelled or when nothing could be read.
+pub fn forecast(items: &[Item], target: Target, cancel: &AtomicBool) -> Option<Forecast> {
+    const SAMPLES: usize = 6;
+    let mut sorted: Vec<&Item> = items.iter().collect();
+    sorted.sort_by_key(|i| i.size);
+    let groups = sorted.len().min(SAMPLES);
+    let budget = Budget::default();
+    // Each group is represented by its middle picture.
+    let measured: Vec<Option<(f64, Sizes)>> = std::thread::scope(|s| {
+        let handles: Vec<_> = (0..groups)
+            .map(|g| {
+                let group = &sorted[sorted.len() * g / groups..sorted.len() * (g + 1) / groups];
+                let budget = &budget;
+                s.spawn(move || {
+                    let total: u64 = group.iter().map(|i| i.size).sum();
+                    let item = group[group.len() / 2];
+                    if item.size > MAX_FILE_BYTES {
+                        return None;
+                    }
+                    let input = fs::read(&item.path).ok()?;
+                    let _permit = budget.acquire(pixel_count(&input).ok()?);
+                    let sizes = estimate(&input, target, cancel).ok()?;
+                    let factor = total as f64 / input.len() as f64;
+                    Some((total as f64, sizes.map(|v| v * factor)))
+                })
+            })
+            .collect();
+        handles.into_iter().map(|h| h.join().ok().flatten()).collect()
+    });
+    if cancel.load(Ordering::Relaxed) {
+        return None;
+    }
+    let mut out = Forecast { before: 0.0, after: [0.0; 4], sampled: 0 };
+    for (before, after) in measured.into_iter().flatten() {
+        out.before += before;
+        out.sampled += 1;
+        for (sum, v) in out.after.iter_mut().zip(after) {
+            *sum += v;
+        }
+    }
+    (out.sampled > 0).then_some(out)
 }

@@ -56,7 +56,10 @@ $ui = Join-Path $work 'giao diện'
 New-Item -ItemType Directory -Force $ui | Out-Null
 Copy-Item $src (Join-Path $ui 'tốt.jpg')
 [IO.File]::WriteAllBytes((Join-Path $ui 'hỏng.jpg'), [byte[]]((Get-Content $src -AsByteStream)[0..2000]))
-$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9222'
+# WebView2 ignores the environment variable in elevated processes, which is what CI uses.
+$key = 'HKLM:\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
+New-Item $key -Force | Out-Null
+Set-ItemProperty $key 'NenAnh.exe' '--remote-debugging-port=9222'
 $p = Start-Process $exe -PassThru
 node (Join-Path $PSScriptRoot 'e2e.mjs') $ui
 Assert ($LASTEXITCODE -eq 0) 'user interface test'

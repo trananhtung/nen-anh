@@ -12,7 +12,7 @@
   },
   "app": {
     "windows": [
-      { "title": "Nén Ảnh", "width": 1080, "height": 720, "minWidth": 820, "minHeight": 560, "dragDropEnabled": true }
+      { "title": "Nén Ảnh", "width": 1000, "height": 680, "center": true, "minWidth": 820, "minHeight": 560, "dragDropEnabled": true }
     ],
     "security": { "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost" }
   },

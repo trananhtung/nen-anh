@@ -6,8 +6,8 @@ Phần mềm Windows giảm dung lượng ảnh JPG, PNG, WebP mà giữ nguyên
 
 Vào mục **Releases**, tải một trong hai file:
 
-- `NenAnh-x.y.z-setup.exe`: bản nhẹ, dùng cho hầu hết máy Windows 10/11.
-- `NenAnh-x.y.z-setup-offline.exe`: kèm sẵn WebView2, dùng khi máy không có mạng.
+- `NenAnh-x.y.z-setup.exe`: bản nhẹ (khoảng 5 MB), dùng cho hầu hết máy Windows 10/11.
+- `NenAnh-x.y.z-setup-offline.exe`: kèm sẵn WebView2 (khoảng 300 MB), dùng khi máy không có mạng.
 
 Bộ cài chưa có chữ ký số nên Windows SmartScreen có thể cảnh báo. Bấm **More info** rồi **Run anyway** nếu bạn tải từ trang này. Có thể đối chiếu file với `SHA256SUMS.txt`.
 

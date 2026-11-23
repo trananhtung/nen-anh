@@ -51,8 +51,16 @@ $img = [Drawing.Image]::FromFile((Join-Path $out 'ảnh đẹp.jpg'))
 Assert ($img.Width -eq 400 -and $img.Height -eq 300) 'dimensions changed'
 $img.Dispose()
 
+# Real window: one good picture, one damaged one.
+$ui = Join-Path $work 'giao diện'
+New-Item -ItemType Directory -Force $ui | Out-Null
+Copy-Item $src (Join-Path $ui 'tốt.jpg')
+[IO.File]::WriteAllBytes((Join-Path $ui 'hỏng.jpg'), [byte[]]((Get-Content $src -AsByteStream)[0..2000]))
+$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9222'
 $p = Start-Process $exe -PassThru
-Start-Sleep 15
+node (Join-Path $PSScriptRoot 'e2e.mjs') $ui
+Assert ($LASTEXITCODE -eq 0) 'user interface test'
+Assert (Test-Path (Join-Path $ui 'anh-nen/tốt.jpg')) 'result is missing'
 $p.Refresh()
 Assert (-not $p.HasExited) 'window closed by itself'
 Assert ($p.MainWindowTitle -eq 'Nén Ảnh') "window title is '$($p.MainWindowTitle)'"

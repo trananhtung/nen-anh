@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "NenAnh",
+  "mainBinaryName": "NenAnh",
+  "version": "1.0.0",
+  "identifier": "io.github.trananhtung.nenanh",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5188",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      { "title": "Nén Ảnh", "width": 1080, "height": 720, "minWidth": 820, "minHeight": 560, "dragDropEnabled": true }
+    ],
+    "security": { "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost" }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.icns", "icons/icon.ico"],
+    "resources": { "../THIRD-PARTY.md": "THIRD-PARTY.md" },
+    "shortDescription": "Giảm dung lượng ảnh, giữ nguyên độ phân giải",
+    "windows": {
+      "webviewInstallMode": { "type": "embedBootstrapper" },
+      "nsis": { "installMode": "currentUser", "languages": ["Vietnamese", "English"], "displayLanguageSelector": false }
+    }
+  }
+}

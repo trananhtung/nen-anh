@@ -1,0 +1,30 @@
+[package]
+name = "nenanh-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+default = []
+# Needs NASM at build time.
+simd = ["mozjpeg/nasm_simd", "mozjpeg-sys/nasm_simd", "rav1e/asm"]
+
+[dependencies]
+mozjpeg = { version = "0.10.13", default-features = false }
+mozjpeg-sys = { version = "2.2.3", default-features = false, features = ["unwinding"] }
+oxipng = { version = "10.2.1", default-features = false, features = ["parallel", "zopfli"] }
+webp = { version = "0.3.1", default-features = false }
+rav1e = { version = "0.8.1", default-features = false, features = ["threading"] }
+avif-serialize = "0.8.6"
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+quantette = "0.6.0"
+color_quant = "1.1.0"
+fast-ssim2 = "0.9.1"
+tempfile = "3.27.0"
+walkdir = "2.5.1"
+libc = "0.2"
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }

@@ -1,0 +1,21 @@
+[package]
+name = "nenanh"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+simd = ["nenanh-core/simd"]
+
+[build-dependencies]
+tauri-build = "2.7.6"
+
+[dependencies]
+nenanh-core = { path = "../crates/core" }
+serde = { version = "1", features = ["derive"] }
+tauri = "2.12.7"
+tauri-plugin-dialog = "2.8.4"
+tauri-plugin-opener = "2.7.3"
+
+[lib]
+name = "nenanh"

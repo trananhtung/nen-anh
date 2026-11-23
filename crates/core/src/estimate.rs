@@ -34,6 +34,7 @@ fn tidy(mut sizes: Sizes, original: f64) -> Sizes {
 
 pub fn estimate(input: &[u8], target: Target, cancel: &AtomicBool) -> Result<Sizes, Error> {
     guarded(|| {
+        check(cancel)?;
         pixel_count(input)?;
         let kind = sniff(input).ok_or("Định dạng không hỗ trợ")?;
         let original = input.len() as f64;

@@ -21,6 +21,7 @@ export interface Item {
 }
 
 export interface Forecast {
+  /** Current size of the pictures covered, which may be fewer than the whole list. */
   before: number;
   /** Predicted size at lossless, high, balanced and small. */
   after: [number, number, number, number];
@@ -51,7 +52,7 @@ export type DropState = "over" | "leave";
 
 export interface Api {
   scan(paths: string[]): Promise<Item[]>;
-  /** Null when superseded by a newer request or when nothing could be read. */
+  /** Null when superseded, when compression is running, or when nothing could be read. */
   forecast(items: Item[], target: Target): Promise<Forecast | null>;
   start(items: Item[], outDir: string | null, options: Options): Promise<void>;
   cancel(): Promise<void>;

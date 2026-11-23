@@ -92,23 +92,37 @@ export function App() {
   };
 
   const list = rows.map((r) => r.item.path).join("\n");
+  /** What the known forecast was computed for. */
+  const forecastKey = useRef("");
+  // Leave the processor to the real work; ask again only while something is waiting to be compressed.
+  const waiting = !running && rows.some((r) => !isFinal(r.report));
   useEffect(() => {
     const items = latest.current.map((r) => r.item);
     if (list === "" || items.length === 0) {
+      forecastKey.current = "";
       setForecast(null);
       return;
     }
+    const key = `${options.target}\n${list}`;
+    if (forecastKey.current === key) return;
+    if (!waiting) {
+      setForecast(null);
+      return;
+    }
+    forecastKey.current = "";
     let stale = false;
     setForecast("working");
     const timer = setTimeout(async () => {
       const result = await api.forecast(items, options.target).catch(() => null);
-      if (!stale) setForecast(result);
+      if (stale) return;
+      if (result) forecastKey.current = key;
+      setForecast(result);
     }, 250);
     return () => {
       stale = true;
       clearTimeout(timer);
     };
-  }, [list, options.target]);
+  }, [list, options.target, waiting]);
 
   const pending = rows.filter((r) => !isFinal(r.report));
   const done = rows.flatMap((r) => (r.report?.state === "done" ? [r.report] : []));

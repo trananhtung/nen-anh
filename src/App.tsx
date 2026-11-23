@@ -178,7 +178,6 @@ export function App() {
   const known = forecast !== null && forecast !== "working" ? forecast : null;
   const levelIndex = LEVELS.findIndex((l) => l.value === options.level);
   const expected = known?.after[levelIndex];
-  // The forecast covers readable pictures only; apply its ratio to the whole list.
   const ratio = known && expected !== undefined && known.before > 0 ? expected / known.before : null;
 
   const promise = (index: number): string => {

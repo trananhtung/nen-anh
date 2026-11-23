@@ -357,9 +357,37 @@ fn forecast_skips_unreadable_files() {
     let no = AtomicBool::new(false);
     let f = batch::forecast(&items, Target::Keep, &no).unwrap();
     assert_eq!(f.sampled, 1);
-    assert!(f.after[2] < f.before);
+    // Both pictures are in the totals; the damaged one is not expected to shrink.
+    assert_eq!(f.before, items.iter().map(|i| i.size).sum::<u64>() as f64);
+    assert!(f.after[2] < f.before && f.after.iter().all(|v| *v > 900.0), "{f:?}");
     assert!(batch::forecast(&[], Target::Keep, &no).is_none());
     assert!(batch::forecast(&items, Target::Keep, &AtomicBool::new(true)).is_none());
+}
+
+#[test]
+fn forecast_replaces_an_unreadable_representative() {
+    let dir = tempfile::tempdir().unwrap();
+    let good = sample_jpeg();
+    // The damaged pictures are larger than the good ones, so they come last in their group.
+    for i in 0..6 {
+        let mut damaged = good.clone();
+        damaged.truncate(900);
+        damaged.resize(good.len() + 1 + i, 0);
+        fs::write(dir.path().join(format!("good{i}.jpg")), &good).unwrap();
+        fs::write(dir.path().join(format!("bad{i}.jpg")), damaged).unwrap();
+    }
+    let mut items = batch::scan(&[dir.path().to_path_buf()]);
+    items.sort_by_key(|i| i.size);
+    // Two of them form two groups: the first has only the good one, the second only the damaged one.
+    let pair = [items[0].clone(), items[11].clone()];
+    let no = AtomicBool::new(false);
+    assert_eq!(batch::forecast(&pair, Target::Keep, &no).unwrap().sampled, 1);
+    // Seven make a last group of two, in which the good one stands in for the damaged one.
+    let mut seven = items[..6].to_vec();
+    seven.push(items[11].clone());
+    let f = batch::forecast(&seven, Target::Keep, &no).unwrap();
+    assert_eq!(f.sampled, 6);
+    assert_eq!(f.before, seven.iter().map(|i| i.size).sum::<u64>() as f64);
 }
 
 fn walk(dir: &std::path::Path) -> Vec<PathBuf> {

@@ -21,9 +21,9 @@ export interface Item {
 }
 
 export interface Forecast {
-  /** Current size of the pictures covered, which may be fewer than the whole list. */
+  /** Size of all pictures now. */
   before: number;
-  /** Predicted size at lossless, high, balanced and small. */
+  /** Predicted size at lossless, high, balanced and small; unreadable pictures count as not shrinking. */
   after: [number, number, number, number];
   sampled: number;
 }
